@@ -9,6 +9,7 @@ const nextConfig = {
 
   reactStrictMode: false,
   swcMinify: false,
+  optimizeFonts: false,
 
   experimental: {
     instrumentationHook: process.env.NODE_ENV === 'production',

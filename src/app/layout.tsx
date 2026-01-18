@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type { Metadata, Viewport } from 'next';
-import { Inter } from 'next/font/google';
+// import { Inter } from 'next/font/google';
 
 import './globals.css';
 
@@ -13,7 +13,7 @@ import RemoteControlProvider from '../components/RemoteControlProvider';
 import { SiteProvider } from '../components/SiteProvider';
 import { ThemeProvider } from '../components/ThemeProvider';
 
-const inter = Inter({ subsets: ['latin'] });
+// const inter = Inter({ subsets: ['latin'] });
 export const dynamic = 'force-dynamic';
 
 // 动态生成 metadata，支持配置更新后的标题变化
@@ -110,7 +110,7 @@ export default async function RootLayout({
         />
       </head>
       <body
-        className={`${inter.className} min-h-screen bg-white text-gray-900 dark:bg-black dark:text-gray-200`}
+        className={`font-sans min-h-screen bg-white text-gray-900 dark:bg-black dark:text-gray-200`}
       >
         <ThemeProvider
           attribute='class'

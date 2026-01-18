@@ -34,42 +34,72 @@ import {
  * 速度监控类
  */
 class SpeedMonitor {
-  private speeds: number[] = [];
-  private startTime: number = Date.now();
-  private readonly CHECK_INTERVAL = 10000; // 10秒检查一次
-  private readonly MIN_SPEED_KBPS = 100; // 最低速度100KB/s
+  // 存储样本点：[时间戳, 总下载字节数]
+  private samples: { time: number; bytes: number }[] = [];
+  private readonly WINDOW_SIZE = 5000; // 计算最近 5 秒的平均速度
 
-  updateSpeed(bytesDownloaded: number): void {
+  constructor() {
+    this.reset();
+  }
+
+  updateSpeed(totalBytesDownloaded: number): void {
     const now = Date.now();
-    const elapsed = (now - this.startTime) / 1000; // 秒
-    if (elapsed > 0) {
-      const speedKBps = bytesDownloaded / 1024 / elapsed;
-      this.speeds.push(speedKBps);
+    this.samples.push({ time: now, bytes: totalBytesDownloaded });
 
-      // 只保留最近10秒的数据
-      const cutoff = now - this.CHECK_INTERVAL;
-      this.speeds = this.speeds.filter((_, i) => {
-        const time = this.startTime + i * (this.CHECK_INTERVAL / 10);
-        return time > cutoff;
-      });
+    // 清理过期的样本（保留窗口期外的一点点数据以便计算边界）
+    const cutoff = now - this.WINDOW_SIZE - 2000;
+    if (this.samples.length > 0 && this.samples[0].time < cutoff) {
+      // 保持至少一个旧样本
+      while (this.samples.length > 2 && this.samples[1].time < cutoff) {
+        this.samples.shift();
+      }
     }
   }
 
-  isSpeedTooSlow(): boolean {
-    if (this.speeds.length < 2) return false; // 至少需要2个数据点
-    const avgSpeed =
-      this.speeds.reduce((a, b) => a + b, 0) / this.speeds.length;
-    return avgSpeed < this.MIN_SPEED_KBPS;
+  isSpeedTooSlow(minSpeedKpbs = 100): boolean {
+    const speed = this.getAverageSpeed(); // KB/s
+    // 只有当有足够数据且速度持续低下时才返回 true
+    // 这里简单判断当前平均速度
+    // 注意：如果是刚开始下载，速度可能不准确，应给一定宽限期
+    if (this.samples.length < 2) return false;
+    // 如果持续时间太短（<5秒），不判断过慢
+    if (this.samples[this.samples.length - 1].time - this.samples[0].time < 5000) return false;
+
+    return speed < minSpeedKpbs;
   }
 
   getAverageSpeed(): number {
-    if (this.speeds.length === 0) return 0;
-    return this.speeds.reduce((a, b) => a + b, 0) / this.speeds.length;
+    if (this.samples.length < 2) return 0;
+
+    const latest = this.samples[this.samples.length - 1];
+    const now = latest.time; // 使用最新样本的时间，避免与 Date.now() 的差异
+
+    // 找到窗口起始点的样本（比如 5 秒前）
+    const windowStart = now - this.WINDOW_SIZE;
+    // 从后往前找，找到第一个早于 windowStart 的样本，或者由最早的样本充当
+    let startSample = this.samples[0];
+    for (let i = this.samples.length - 2; i >= 0; i--) {
+      if (this.samples[i].time <= windowStart) {
+        startSample = this.samples[i];
+        break;
+      }
+    }
+
+    // 如果样本时间差太小，无法计算准确速度
+    const timeDiff = latest.time - startSample.time;
+    if (timeDiff < 100) return 0; // 防止除以0或极小值
+
+    const bytesDiff = latest.bytes - startSample.bytes;
+    const speedBps = (bytesDiff * 1000) / timeDiff; // Bytes per second
+    const speedKBps = speedBps / 1024;
+
+    return speedKBps;
   }
 
   reset(): void {
-    this.speeds = [];
-    this.startTime = Date.now();
+    this.samples = [];
+    // 初始化添加一个 0 点，方便刚开始从 0 bytes 计算
+    this.samples.push({ time: Date.now(), bytes: 0 });
   }
 }
 
@@ -285,6 +315,7 @@ export class VideoDownloadService {
     // 尝试从每个源下载（顺序尝试，不支持并发）
     let downloadSuccess = false;
     const speedMonitor = new SpeedMonitor();
+    const errors: string[] = [];
 
     for (const source of prioritizedSources) {
       // 检查任务是否已被取消
@@ -336,6 +367,8 @@ export class VideoDownloadService {
           break;
         } else {
           // 下载失败，记录并尝试下一个源
+          const errorMsg = `${source}: ${result.error}`;
+          errors.push(errorMsg);
           await updateSourceHistory(source, {
             success: false,
             error: result.error,
@@ -344,6 +377,8 @@ export class VideoDownloadService {
         }
       } catch (error) {
         // 记录错误，继续尝试下一个源
+        const errorMsg = `${source}: ${(error as Error).message}`;
+        errors.push(errorMsg);
         await updateSourceHistory(source, {
           success: false,
           error: (error as Error).message,
@@ -352,7 +387,7 @@ export class VideoDownloadService {
     }
 
     if (!downloadSuccess) {
-      throw new Error('所有源都下载失败');
+      throw new Error(`所有源都下载失败: ${errors.join('; ')}`);
     }
   }
 

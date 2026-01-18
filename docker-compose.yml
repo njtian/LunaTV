@@ -1,0 +1,24 @@
+services:
+  lunatv:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: lunatv
+    restart: unless-stopped
+    ports:
+      - '3004:3004'
+    environment:
+      - PORT=3004
+      - USERNAME=admin
+      - PASSWORD=MoonTV2024!
+      - NEXT_PUBLIC_STORAGE_TYPE=redis
+      - REDIS_URL=redis://192.168.5.249:6379/2
+      - NEXT_PUBLIC_ENABLE_REMOTE=true
+      # 可选配置
+      # - SITE_NAME=LunaTV
+      # - ANNOUNCEMENT=
+      # - NEXT_PUBLIC_ENABLE_REGISTER=false
+    volumes:
+      - ./.cache:/app/.cache
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
