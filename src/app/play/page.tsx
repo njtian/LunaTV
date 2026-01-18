@@ -24,7 +24,11 @@ import {
 import { useDownloadStatusSafe } from '@/components/DownloadStatusProvider';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
-import { getDownloadedList } from '@/lib/video-cache.client';
+import {
+  getDownloadedList,
+  getDownloadedPlayUrl,
+  isEpisodeDownloaded,
+} from '@/lib/video-cache.client';
 
 import EpisodeSelector from '@/components/EpisodeSelector';
 import PageLayout from '@/components/PageLayout';
@@ -180,13 +184,37 @@ function PlayPageClient() {
 
   // 处理下载状态变更
   const handleDownloadChange = useCallback(
-    (_seriesKey: string, _episodeIndex: number, _isDownloaded: boolean) => {
+    async (_seriesKey: string, _episodeIndex: number, _isDownloaded: boolean) => {
       // 触发Context刷新，这将更新所有相关组件的状态
       downloadStatusContext?.refresh();
-      // 刷新已下载列表
-      fetchDownloadedEpisodes();
+
+      // 只处理当前系列的下载状态变化
+      if (_seriesKey !== seriesKey) return;
+
+      // 如果检测到下载完成，重新从服务器获取完整的下载列表，确保数据准确
+      if (_isDownloaded) {
+        // 关键：给后端落盘/索引更新一个缓冲时间（不重试）
+        await new Promise<void>((resolve) => setTimeout(resolve, 800));
+        await fetchDownloadedEpisodes();
+
+        // 尝试刷新当前播放地址（如果是当前集刚下载完，可能会切换到本地源）
+        // 使用 refs 获取最新的 detail 和 episodeIndex
+        if (
+          detailRef.current &&
+          currentEpisodeIndexRef.current === _episodeIndex - 1
+        ) {
+          updateVideoUrl(detailRef.current, currentEpisodeIndexRef.current);
+        }
+      } else {
+        // 删除时，只更新本地状态即可
+        setDownloadedEpisodes((prev) => {
+          const updated = new Set(prev);
+          updated.delete(_episodeIndex);
+          return updated;
+        });
+      }
     },
-    [downloadStatusContext, fetchDownloadedEpisodes]
+    [downloadStatusContext, fetchDownloadedEpisodes, seriesKey]
   );
 
   // 视频播放地址
@@ -450,8 +478,8 @@ function PlayPageClient() {
     return Math.round(score * 100) / 100; // 保留两位小数
   };
 
-  // 更新视频地址
-  const updateVideoUrl = (
+  // 更新视频地址（优先使用已下载文件）
+  const updateVideoUrl = async (
     detailData: SearchResult | null,
     episodeIndex: number
   ) => {
@@ -463,6 +491,45 @@ function PlayPageClient() {
       setVideoUrl('');
       return;
     }
+
+    // 检查是否有已下载文件
+    const currentSeriesKey = seriesKey; // 使用组件状态中的 seriesKey
+    console.log('updateVideoUrl - 检查下载:', {
+      seriesKey: currentSeriesKey,
+      episodeIndex: episodeIndex + 1,
+      currentVideoUrl: videoUrl,
+    });
+
+    if (currentSeriesKey) {
+      try {
+        const isDownloaded = await isEpisodeDownloaded(
+          currentSeriesKey,
+          episodeIndex + 1
+        );
+        console.log('updateVideoUrl - 下载检查结果:', {
+          isDownloaded,
+          episodeIndex: episodeIndex + 1,
+        });
+
+        if (isDownloaded) {
+          // 使用已下载文件的播放 URL
+          const downloadedUrl = getDownloadedPlayUrl(
+            currentSeriesKey,
+            episodeIndex + 1
+          );
+          console.log('updateVideoUrl - 使用已下载文件:', downloadedUrl);
+          setVideoUrl(downloadedUrl);
+          return; // 已下载文件，直接返回，不继续执行
+        }
+      } catch (error) {
+        console.warn('检查已下载文件失败:', error);
+        // 降级到原始 URL
+      }
+    } else {
+      console.log('updateVideoUrl - seriesKey 未设置，跳过下载检查');
+    }
+
+    // 使用原始 URL
     const newUrl = detailData?.episodes[episodeIndex] || '';
     if (newUrl !== videoUrl) {
       setVideoUrl(newUrl);
@@ -688,10 +755,10 @@ function PlayPageClient() {
     }
   }
 
-  // 当集数索引变化时自动更新视频地址
+  // 当集数索引变化或详情变化时自动更新视频地址
   useEffect(() => {
     updateVideoUrl(detail, currentEpisodeIndex);
-  }, [detail, currentEpisodeIndex]);
+  }, [detail, currentEpisodeIndex, seriesKey]);
 
   // 进入页面时直接获取全部源信息
   useEffect(() => {
