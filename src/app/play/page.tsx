@@ -6,7 +6,7 @@ import Artplayer from 'artplayer';
 import Hls from 'hls.js';
 import { Heart } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   deleteFavorite,
@@ -21,8 +21,10 @@ import {
   saveSkipConfig,
   subscribeToDataUpdates,
 } from '@/lib/db.client';
+import { useDownloadStatusSafe } from '@/components/DownloadStatusProvider';
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
+import { getDownloadedList } from '@/lib/video-cache.client';
 
 import EpisodeSelector from '@/components/EpisodeSelector';
 import PageLayout from '@/components/PageLayout';
@@ -56,6 +58,9 @@ function PlayPageClient() {
   const [loadingMessage, setLoadingMessage] = useState('正在搜索播放源...');
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<SearchResult | null>(null);
+
+  // 下载状态Context
+  const downloadStatusContext = useDownloadStatusSafe();
 
   // 收藏状态
   const [favorited, setFavorited] = useState(false);
@@ -145,6 +150,44 @@ function PlayPageClient() {
     videoTitle,
     videoYear,
   ]);
+
+  // 生成系列Key
+  const seriesKey =
+    currentSource && currentId ? `${currentSource}-${currentId}` : '';
+
+  // 获取该系列已下载的集数集合
+  const [downloadedEpisodes, setDownloadedEpisodes] = useState<Set<number>>(
+    new Set()
+  );
+
+  const fetchDownloadedEpisodes = useCallback(async () => {
+    if (!seriesKey) {
+      setDownloadedEpisodes(new Set());
+      return;
+    }
+    try {
+      const data = await getDownloadedList(seriesKey);
+      const episodes = new Set(data.downloads.map((d: any) => d.episode_index));
+      setDownloadedEpisodes(episodes);
+    } catch (e) {
+      console.error('获取已下载集数失败:', e);
+    }
+  }, [seriesKey]);
+
+  useEffect(() => {
+    fetchDownloadedEpisodes();
+  }, [fetchDownloadedEpisodes]);
+
+  // 处理下载状态变更
+  const handleDownloadChange = useCallback(
+    (_seriesKey: string, _episodeIndex: number, _isDownloaded: boolean) => {
+      // 触发Context刷新，这将更新所有相关组件的状态
+      downloadStatusContext?.refresh();
+      // 刷新已下载列表
+      fetchDownloadedEpisodes();
+    },
+    [downloadStatusContext, fetchDownloadedEpisodes]
+  );
 
   // 视频播放地址
   const [videoUrl, setVideoUrl] = useState('');
@@ -1959,6 +2002,10 @@ function PlayPageClient() {
                 sourceSearchLoading={sourceSearchLoading}
                 sourceSearchError={sourceSearchError}
                 precomputedVideoInfo={precomputedVideoInfo}
+                // 下载相关 props
+                seriesKey={seriesKey}
+                downloadedEpisodes={downloadedEpisodes}
+                onDownloadChange={handleDownloadChange}
               />
             </div>
           </div>

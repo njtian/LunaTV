@@ -11,6 +11,7 @@ import React, {
 
 import { SearchResult } from '@/lib/types';
 import { getVideoResolutionFromM3u8, processImageUrl } from '@/lib/utils';
+import DownloadButton from './DownloadButton';
 
 // 定义视频信息类型
 interface VideoInfo {
@@ -24,7 +25,7 @@ interface EpisodeSelectorProps {
   /** 总集数 */
   totalEpisodes: number;
   /** 剧集标题 */
-  episodes_titles: string[];
+  episodes_titles?: string[];
   /** 每页显示多少集，默认 50 */
   episodesPerPage?: number;
   /** 当前选中的集数（1 开始） */
@@ -42,6 +43,15 @@ interface EpisodeSelectorProps {
   sourceSearchError?: string | null;
   /** 预计算的测速结果，避免重复测速 */
   precomputedVideoInfo?: Map<string, VideoInfo>;
+  /** 下载相关 */
+  seriesKey?: string;
+  downloadedEpisodes?: Set<number>;
+  /** 下载状态变化回调 */
+  onDownloadChange?: (
+    seriesKey: string,
+    episodeIndex: number,
+    isDownloaded: boolean
+  ) => void;
 }
 
 /**
@@ -61,6 +71,9 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
   sourceSearchLoading = false,
   sourceSearchError = null,
   precomputedVideoInfo,
+  seriesKey,
+  downloadedEpisodes = new Set(),
+  onDownloadChange,
 }) => {
   const router = useRouter();
   const pageCount = Math.ceil(totalEpisodes / episodesPerPage);
@@ -449,29 +462,67 @@ const EpisodeSelector: React.FC<EpisodeSelectorProps> = ({
               return episodes;
             })().map((episodeNumber) => {
               const isActive = episodeNumber === value;
+              const isDownloaded = downloadedEpisodes.has(episodeNumber);
+              // 获取当前集的 URL（如果有）
+              const currentDetail = availableSources.find(
+                (s) => s.source === currentSource && s.id === currentId
+              );
+              const episodeUrl =
+                currentDetail?.episodes?.[episodeNumber - 1] || undefined;
+
               return (
-                <button
+                <div
                   key={episodeNumber}
-                  onClick={() => handleEpisodeClick(episodeNumber - 1)}
-                  className={`h-10 min-w-10 px-3 py-2 flex items-center justify-center text-sm font-medium rounded-md transition-all duration-200 whitespace-nowrap font-mono
-                    ${isActive
-                      ? 'bg-green-500 text-white shadow-lg shadow-green-500/25 dark:bg-green-600'
-                      : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/20'
-                    }`.trim()}
+                  className='relative flex items-center justify-center'
                 >
-                  {(() => {
-                    const title = episodes_titles?.[episodeNumber - 1];
-                    if (!title) {
-                      return episodeNumber;
+                  <button
+                    onClick={() => handleEpisodeClick(episodeNumber - 1)}
+                    className={`h-10 min-w-10 px-3 py-2 flex items-center justify-center text-sm font-medium rounded-md transition-all duration-200 whitespace-nowrap font-mono
+                    ${isActive
+                        ? 'bg-green-500 text-white shadow-lg shadow-green-500/25 dark:bg-green-600'
+                        : 'bg-gray-200 text-gray-700 hover:bg-gray-300 hover:scale-105 dark:bg-white/10 dark:text-gray-300 dark:hover:bg-white/20'
+                      }`.trim()}
+                    title={
+                      isDownloaded
+                        ? `第${episodeNumber}集（已下载）`
+                        : `第${episodeNumber}集`
                     }
-                    // 如果匹配"第X集"、"第X话"、"X集"、"X话"格式，提取中间的数字
-                    const match = title.match(/(?:第)?(\d+)(?:集|话)/);
-                    if (match) {
-                      return match[1];
-                    }
-                    return title;
-                  })()}
-                </button>
+                  >
+                    {(() => {
+                      const title = episodes_titles?.[episodeNumber - 1];
+                      if (!title) {
+                        return episodeNumber;
+                      }
+                      // 如果匹配"第X集"、"第X话"、"X集"、"X话"格式，提取中间的数字
+                      const match = title.match(/(?:第)?(\d+)(?:集|话)/);
+                      if (match) {
+                        return match[1];
+                      }
+                      return title;
+                    })()}
+                  </button>
+                  {/* 下载按钮 - 仅在有seriesKey时显示 */}
+                  {seriesKey && (
+                    <div
+                      className='absolute -top-1 -right-1 z-50 scale-75'
+                      style={{ pointerEvents: 'auto' }}
+                    >
+                      <DownloadButton
+                        seriesKey={seriesKey}
+                        episodeIndex={episodeNumber}
+                        source={currentSource || ''}
+                        url={episodeUrl}
+                        title={videoTitle || ''}
+                        episodeTitle={`第${episodeNumber}集`}
+                        downloaded={isDownloaded}
+                        autoCheck={false}
+                        size='sm'
+                        className='bg-white/40 dark:bg-gray-800/40 backdrop-blur-sm rounded-full shadow-sm'
+                        onDownloadChange={onDownloadChange}
+                      />
+                    </div>
+                  )}
+                </div>
               );
             })}
           </div>

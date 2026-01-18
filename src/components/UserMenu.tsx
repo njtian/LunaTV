@@ -5,6 +5,7 @@
 import {
   Check,
   ChevronDown,
+  Download,
   ExternalLink,
   KeyRound,
   LogOut,
@@ -515,6 +516,18 @@ export const UserMenu: React.FC = () => {
 
         {/* 菜单项 */}
         <div className='py-1'>
+          {/* 离线下载按钮 */}
+          <button
+            onClick={() => {
+              setIsOpen(false);
+              router.push('/downloads');
+            }}
+            className='w-full px-3 py-2 text-left flex items-center gap-2.5 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors text-sm'
+          >
+            <Download className='w-4 h-4 text-gray-500 dark:text-gray-400' />
+            <span className='font-medium'>离线下载</span>
+          </button>
+
           {/* 设置按钮 */}
           <button
             onClick={handleSettings}

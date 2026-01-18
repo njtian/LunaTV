@@ -7,7 +7,9 @@ import './globals.css';
 
 import { getConfig } from '@/lib/config';
 
+import DownloadStatusProvider from '../components/DownloadStatusProvider';
 import { GlobalErrorIndicator } from '../components/GlobalErrorIndicator';
+import RemoteControlProvider from '../components/RemoteControlProvider';
 import { SiteProvider } from '../components/SiteProvider';
 import { ThemeProvider } from '../components/ThemeProvider';
 
@@ -117,8 +119,11 @@ export default async function RootLayout({
           disableTransitionOnChange
         >
           <SiteProvider siteName={siteName} announcement={announcement}>
-            {children}
-            <GlobalErrorIndicator />
+            <RemoteControlProvider />
+            <DownloadStatusProvider>
+              {children}
+              <GlobalErrorIndicator />
+            </DownloadStatusProvider>
           </SiteProvider>
         </ThemeProvider>
       </body>

@@ -47,6 +47,7 @@ export interface VideoCardProps {
   isBangumi?: boolean;
   isAggregate?: boolean;
   origin?: 'vod' | 'live';
+  onClick?: () => void;
 }
 
 export type VideoCardHandle = {
@@ -76,6 +77,7 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
     isBangumi = false,
     isAggregate = false,
     origin = 'vod',
+    onClick,
   }: VideoCardProps,
   ref
 ) {
@@ -223,6 +225,10 @@ const VideoCard = forwardRef<VideoCardHandle, VideoCardProps>(function VideoCard
   );
 
   const handleClick = useCallback(() => {
+    if (onClick) {
+      onClick();
+      return;
+    }
     if (origin === 'live' && actualSource && actualId) {
       // 直播内容跳转到直播页面
       const url = `/live?source=${actualSource.replace('live_', '')}&id=${actualId.replace('live_', '')}`;
