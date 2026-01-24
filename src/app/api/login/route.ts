@@ -15,6 +15,10 @@ const STORAGE_TYPE =
     | 'kvrocks'
     | undefined) || 'localstorage';
 
+// 读取会话过期时间环境变量，默认 7 天
+const SESSION_EXPIRES_IN_DAYS = parseInt(process.env.SESSION_EXPIRES_IN_DAYS || '7', 10);
+
+
 // 生成签名
 async function generateSignature(
   data: string,
@@ -110,7 +114,7 @@ export async function POST(req: NextRequest) {
         true
       ); // localstorage 模式包含 password
       const expires = new Date();
-      expires.setDate(expires.getDate() + 7); // 7天过期
+      expires.setDate(expires.getDate() + SESSION_EXPIRES_IN_DAYS); // 默认7天过期，可配置
 
       response.cookies.set('auth', cookieValue, {
         path: '/',
@@ -147,7 +151,7 @@ export async function POST(req: NextRequest) {
         false
       ); // 数据库模式不包含 password
       const expires = new Date();
-      expires.setDate(expires.getDate() + 7); // 7天过期
+      expires.setDate(expires.getDate() + SESSION_EXPIRES_IN_DAYS); // 默认7天过期，可配置
 
       response.cookies.set('auth', cookieValue, {
         path: '/',
@@ -187,7 +191,7 @@ export async function POST(req: NextRequest) {
         false
       ); // 数据库模式不包含 password
       const expires = new Date();
-      expires.setDate(expires.getDate() + 7); // 7天过期
+      expires.setDate(expires.getDate() + SESSION_EXPIRES_IN_DAYS); // 默认7天过期，可配置
 
       response.cookies.set('auth', cookieValue, {
         path: '/',

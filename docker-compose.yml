@@ -18,6 +18,7 @@ services:
       # - SITE_NAME=LunaTV
       # - ANNOUNCEMENT=
       # - NEXT_PUBLIC_ENABLE_REGISTER=false
+      - SESSION_EXPIRES_IN_DAYS
     volumes:
       - ./.cache:/app/.cache
     extra_hosts:
