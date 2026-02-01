@@ -205,6 +205,7 @@ export class VideoDownloadService {
       retry_count: 0,
       source_switches: [],
       source_switched: false,
+      initial_url: options.url || undefined,
     };
 
     // 保存任务文件
@@ -299,10 +300,29 @@ export class VideoDownloadService {
 
     // 获取该集的所有可用源
     const episodeKey = task.episode_index.toString();
-    const episodeLinks = cachedSeries.episodes[episodeKey] || [];
+    let episodeLinks = cachedSeries.episodes[episodeKey] || [];
+
+    // 缓存无该集链接时：若发起下载时传入了直链，用其作为回退
+    if (episodeLinks.length === 0 && task.initial_url) {
+      episodeLinks = [
+        {
+          source: task.requested_source,
+          source_name: task.requested_source,
+          url: task.initial_url,
+          cached_at: Date.now(),
+        },
+      ];
+    }
 
     if (episodeLinks.length === 0) {
-      throw new Error('该集没有可用的下载链接');
+      const total = cachedSeries.total_episodes ?? 0;
+      const hint =
+        total > 0
+          ? `当前缓存共 ${total} 集，请求的是第 ${task.episode_index} 集；`
+          : '';
+      throw new Error(
+        `该集没有可用的下载链接。${hint}可能原因：详情页未返回播放地址、或请求的集数超出总集数。请先在播放页确认该集可播再重试。`
+      );
     }
 
     // 获取优先级排序的源列表

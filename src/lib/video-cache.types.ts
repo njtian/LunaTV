@@ -155,6 +155,8 @@ export interface DownloadTask {
   retry_count: number;
   source_switches: SourceSwitchRecord[];
   source_switched: boolean;
+  /** 发起下载时前端传入的直链，缓存无该集链接时用作回退 */
+  initial_url?: string;
 }
 
 /**
